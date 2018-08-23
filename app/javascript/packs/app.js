@@ -1,5 +1,7 @@
 import Vue from 'vue';
 
+const Api = require('./api');
+
 document.addEventListener("DOMContentLoaded", (e) => {
   var app = new Vue({
     el: "#app",
@@ -25,12 +27,7 @@ document.addEventListener("DOMContentLoaded", (e) => {
       },
     },
     data: {
-      tasks: [
-        {id: 1, name: "Todo 1", description: "This is a todo", completed: false},
-        {id: 2, name: "Todo 2", description: "This is a todo", completed: false},
-        {id: 3, name: "Todo Three", description: "This is a completed todo", completed: true},
-        {id: 4, name: "Todo Four", description: "This is another completed todo", completed: true}
-      ],
+      tasks: [],
       task: {},
       message: "",
       action: "create"
@@ -47,10 +44,30 @@ document.addEventListener("DOMContentLoaded", (e) => {
       }
     },
     methods: {
+      listTasks: function() {
+        Api.listTasks().then(function(response) {
+          app.tasks = response
+        })
+      },
       clear: function() {
         this.task = {};
         this.action = "create";
         this.message = "";
+      },
+      toggleDone: function(event, id) {
+        event.stopImmediatePropagation();
+        let task = this.tasks.find(item => item.id == id);
+        if (task) {
+          task.completed = !task.completed;
+          this.task = task;
+          
+          Api.updateTask(this.task).then(function(response) {
+            app.listTasks();
+            app.clear();
+            let status = response.completed ? 'completed' : 'in progress';
+            app.message = `Task ${response.id} is ${status}.`;
+          })
+        }
       },
       createTask: function(event) {
         if (!this.task.completed) {
@@ -59,27 +76,28 @@ document.addEventListener("DOMContentLoaded", (e) => {
           this.task.completed = true;
         }
   
-        let taskId = this.nextId;
-  
-        this.task.id = taskId;
-        this.tasks.push(this.task);
-        this.clear();
-        this.message = `Task ${taskId} created`;
+        Api.createTask(this.task).then(function(response) {
+          app.listTasks();
+          app.clear();
+          app.message = `Task ${response.id} created`;
+        })
       },
-      toggleDone: function(event, id) {
+      updateTask: function(event, id) {
         event.stopImmediatePropagation();
-        let task = this.tasks.find(item => item.id == id);
-        if (task) {
-          task.completed = !task.completed;
-          this.message = `Task ${id} updated`;
-        }
+        Api.updateTask(this.task).then(function(response) {
+          app.listTasks();
+          app.clear();
+          app.message = `Task ${response.id} updated`;
+        })
       },
       deleteTask: function(event, id) {
         event.stopImmediatePropagation();
         let taskIndex = this.tasks.findIndex(item => item.id == id);
         if (taskIndex > -1) {
-          this.$delete(this.tasks, taskIndex);
-          this.message = `Task ${id} deleted`;
+          Api.deleteTask(id).then(function(response) {
+            app.$delete(app.tasks, taskIndex);
+            app.message = `Task ${id} deleted`;
+          });
         }
       },
       editTask: function(event, id) {
@@ -94,18 +112,8 @@ document.addEventListener("DOMContentLoaded", (e) => {
             id: task.id
           };
         }
-      },
-      updateTask: function(event, id) {
-        event.stopImmediatePropagation();
-        let task = this.tasks.find(item => item.id == id);
-        if (task) {
-          task.name = this.task.name,
-          task.description = this.task.description,
-          task.completed = this.task.completed;
-          this.clear();
-          this.message = `Task ${id} updated`;
-        }
       }
-    }
+    },
+    beforeMount() { this.listTasks() }
   })
 });
